@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,13 +15,21 @@ const (
 
 type ScheduleRef uuid.UUID
 
+func NewRef() ScheduleRef {
+	return ScheduleRef(uuid.New())
+}
+
+func NewRefString(key string) ScheduleRef {
+	return ScheduleRef(uuid.Must(uuid.Parse(key)))
+}
+
 func (sr ScheduleRef) String() string {
-	return fmt.Sprintf("schedule-%s", uuid.UUID(sr).String())
+	return uuid.UUID(sr).String()
 }
 
 type Value struct {
-	Date    time.Time
-	Webhook string
+	Date    time.Time `json:"date"`
+	Webhook string    `json:"webhook"`
 }
 
 type ValueVer struct {

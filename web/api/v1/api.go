@@ -14,7 +14,7 @@ type API struct {
 }
 
 func New(log *log.Logger, storage storage.Storage) *API {
-	return &API{log: log}
+	return &API{log: log, storage: storage}
 }
 
 func (api *API) Register(mux *http.ServeMux) {

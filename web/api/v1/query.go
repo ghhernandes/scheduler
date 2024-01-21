@@ -41,7 +41,7 @@ func (s ScheduleQuery) query(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	scheduleSet := s.queryable.Querier(ctx).Select(ctx, queryMatchers(r.URL)...)
+	scheduleSet := s.queryable.Querier(ctx).Select(ctx, parseMatchers(r.URL)...)
 
 	for scheduleSet.Next() {
 		results = append(results, ScheduleResult{
@@ -61,7 +61,7 @@ func (s ScheduleQuery) query(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func queryMatchers(url *url.URL) []scheduler.Matcher {
+func parseMatchers(url *url.URL) []scheduler.Matcher {
 	var matchers []scheduler.Matcher
 
 	params := url.Query()
