@@ -32,6 +32,10 @@ func (etcd etcd) Append(ctx context.Context, ref *scheduler.ScheduleRef, v sched
 	return newRef, err
 }
 
+func (etcd etcd) Scheduled(ctx context.Context, s scheduler.Schedule) error {
+	return nil
+}
+
 func (etcd etcd) Commit() error {
 	return nil
 }

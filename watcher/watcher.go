@@ -10,6 +10,15 @@ import (
 	"github.com/ghhernandes/scheduler/storage"
 )
 
+type Config struct {
+	DispatchTimeout  time.Duration
+	ScheduledTimeout time.Duration
+
+	Watcher    Watcher
+	Dispatcher dispatcher.Dispatcher
+	Storage    storage.Storage
+}
+
 type Handler struct {
 	log *log.Logger
 
@@ -20,11 +29,14 @@ type Handler struct {
 	storage    storage.Storage
 }
 
-func New(log *log.Logger, w Watcher, d dispatcher.Dispatcher) *Handler {
+func New(log *log.Logger, cfg Config) *Handler {
 	return &Handler{
-		log:     log,
-		watcher: w,
-		chQuit:  make(chan struct{}),
+		log:    log,
+		chQuit: make(chan struct{}),
+
+		watcher:    cfg.Watcher,
+		dispatcher: cfg.Dispatcher,
+		storage:    cfg.Storage,
 	}
 }
 
@@ -37,7 +49,11 @@ func (h *Handler) Watch(ctx context.Context) {
 		case <-ctx.Done():
 			h.log.Println("watcher context done.")
 			return
-		case schedule := <-chWatch:
+		case schedule, ok := <-chWatch:
+			if !ok {
+				h.log.Println("watch channel closed.")
+				return
+			}
 			h.handle(ctx, schedule)
 		}
 	}
