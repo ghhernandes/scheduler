@@ -20,7 +20,8 @@ type Config struct {
 }
 
 type Handler struct {
-	log *log.Logger
+	log    *log.Logger
+	config *Config
 
 	chQuit chan struct{}
 
@@ -32,6 +33,7 @@ type Handler struct {
 func New(log *log.Logger, cfg Config) *Handler {
 	return &Handler{
 		log:    log,
+		config: &cfg,
 		chQuit: make(chan struct{}),
 
 		watcher:    cfg.Watcher,
@@ -64,7 +66,7 @@ func (h *Handler) Done() <-chan struct{} {
 }
 
 func (h *Handler) handle(ctx context.Context, s scheduler.Schedule) {
-	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctxTimeout, cancel := context.WithTimeout(ctx, h.config.DispatchTimeout)
 
 	chDispatch := make(chan error)
 	go func() {
@@ -81,7 +83,7 @@ func (h *Handler) handle(ctx context.Context, s scheduler.Schedule) {
 			return
 		}
 
-		ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+		ctxTimeout, cancel := context.WithTimeout(ctx, h.config.ScheduledTimeout)
 		defer cancel()
 
 		if err := storage.ScheduledCommit(ctxTimeout, h.storage, s); err != nil {
