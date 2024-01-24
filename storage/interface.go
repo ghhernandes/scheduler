@@ -9,6 +9,8 @@ import (
 type Appender interface {
 	Append(ctx context.Context, ref *scheduler.ScheduleRef, v scheduler.Value) (scheduler.ScheduleRef, error)
 
+	Scheduled(ctx context.Context, s scheduler.Schedule) error
+
 	Commit() error
 
 	Rollback() error

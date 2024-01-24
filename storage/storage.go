@@ -20,3 +20,18 @@ func AppendAndCommit(ctx context.Context, storage Storage, ref *scheduler.Schedu
 
 	return resultRef, nil
 }
+
+func ScheduledCommit(ctx context.Context, storage Storage, s scheduler.Schedule) error {
+	a := storage.Appender(ctx)
+
+	err := a.Scheduled(ctx, s)
+	if err != nil {
+		return err
+	}
+
+	if err = a.Commit(); err != nil {
+		return err
+	}
+
+	return nil
+}
