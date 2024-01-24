@@ -25,9 +25,9 @@ func main() {
 	defer storage.Close()
 
 	watcher := watcher.New(logger, watcher.Config{
-		DispatchTimeout:  5 * time.Second,
-		ScheduledTimeout: 5 * time.Second,
+		HandleTimeout: 10 * time.Second,
 
+		Locker:     nil,
 		Watcher:    nil,
 		Dispatcher: nil,
 		Storage:    storage,

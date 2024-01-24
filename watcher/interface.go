@@ -7,5 +7,5 @@ import (
 )
 
 type Watcher interface {
-	Watch(ctx context.Context) <-chan scheduler.Schedule
+	Watch(ctx context.Context) (<-chan scheduler.Schedule, error)
 }

@@ -7,13 +7,14 @@ import (
 
 	"github.com/ghhernandes/scheduler"
 	"github.com/ghhernandes/scheduler/dispatcher"
+	"github.com/ghhernandes/scheduler/lock"
 	"github.com/ghhernandes/scheduler/storage"
 )
 
 type Config struct {
-	DispatchTimeout  time.Duration
-	ScheduledTimeout time.Duration
+	HandleTimeout time.Duration
 
+	Locker     lock.Locker
 	Watcher    Watcher
 	Dispatcher dispatcher.Dispatcher
 	Storage    storage.Storage
@@ -25,6 +26,7 @@ type Handler struct {
 
 	chQuit chan struct{}
 
+	locker     lock.Locker
 	watcher    Watcher
 	dispatcher dispatcher.Dispatcher
 	storage    storage.Storage
@@ -36,6 +38,7 @@ func New(log *log.Logger, cfg Config) *Handler {
 		config: &cfg,
 		chQuit: make(chan struct{}),
 
+		locker:     cfg.Locker,
 		watcher:    cfg.Watcher,
 		dispatcher: cfg.Dispatcher,
 		storage:    cfg.Storage,
@@ -44,21 +47,28 @@ func New(log *log.Logger, cfg Config) *Handler {
 
 func (h *Handler) Watch(ctx context.Context) {
 	defer close(h.chQuit)
-	chWatch := h.watcher.Watch(ctx)
 
-	for {
-		select {
-		case <-ctx.Done():
-			h.log.Println("watcher context done.")
-			return
-		case schedule, ok := <-chWatch:
-			if !ok {
-				h.log.Println("watch channel closed.")
-				return
-			}
-			h.handle(ctx, schedule)
-		}
+	chWatch, err := h.watcher.Watch(ctx)
+	if err != nil {
+		h.log.Printf("watcher start: error: %s", err.Error())
+		return
 	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				h.log.Println("watcher context done.")
+				return
+			case schedule, ok := <-chWatch:
+				if !ok {
+					h.log.Println("watch channel closed.")
+					return
+				}
+				go h.handle(ctx, schedule)
+			}
+		}
+	}()
 }
 
 func (h *Handler) Done() <-chan struct{} {
@@ -66,28 +76,37 @@ func (h *Handler) Done() <-chan struct{} {
 }
 
 func (h *Handler) handle(ctx context.Context, s scheduler.Schedule) {
-	ctxTimeout, cancel := context.WithTimeout(ctx, h.config.DispatchTimeout)
+	if !h.acquireLock(s) {
+		return
+	}
+	defer h.unlock(s.Ref)
 
-	chDispatch := make(chan error)
-	go func() {
-		err := h.dispatcher.Dispatch(ctxTimeout, s)
-		chDispatch <- err
-	}()
+	ctxHandle, cancelHandle := context.WithTimeout(ctx, h.config.HandleTimeout)
+	defer cancelHandle()
 
-	go func() {
-		err := <-chDispatch
-		cancel()
+	err := h.dispatcher.Dispatch(ctxHandle, s)
+	if err != nil {
+		h.log.Printf("dispatch: error: %s", err.Error())
+		return
+	}
 
-		if err != nil {
-			h.log.Printf("dispatch: error: %s", err.Error())
-			return
-		}
+	if err := storage.ScheduledCommit(ctxHandle, h.storage, s); err != nil {
+		h.log.Printf("watcher: scheduled commit: error: %s", err.Error())
+	}
+}
 
-		ctxTimeout, cancel := context.WithTimeout(ctx, h.config.ScheduledTimeout)
-		defer cancel()
+func (h *Handler) acquireLock(s scheduler.Schedule) bool {
+	err := h.locker.Lock(s.Ref)
+	if err != nil {
+		h.log.Printf("watcher: cannot lock ref %s", s.Ref)
+		return false
+	}
+	return true
+}
 
-		if err := storage.ScheduledCommit(ctxTimeout, h.storage, s); err != nil {
-			h.log.Printf("watcher: scheduled commit: error: %s", err.Error())
-		}
-	}()
+func (h *Handler) unlock(ref scheduler.ScheduleRef) {
+	err := h.locker.Unlock(ref)
+	if err != nil {
+		h.log.Printf("watch: handler: unlock error: %s", err.Error())
+	}
 }
